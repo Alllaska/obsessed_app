@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Daily Tracker</title>
+<style>
+  :root {
+    --bg-app: #18181a;
+    --card: #242427;
+    --card-border: rgba(255,255,255,0.05);
+    --text: #f2f2f4;
+    --text-dim: #8a8a90;
+    --text-faint: #6c6c72;
+    --line: #3a3a3e;
+    --radius-card: 16px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+    background: #050506;
+    color: var(--text);
+    min-height: 100%;
+    display: flex;
+    justify-content: center;
+    /* ambient colored glow like the reference wallpaper */
+    background-image:
+      radial-gradient(40% 30% at 15% 8%, rgba(99,102,241,0.18), transparent 70%),
+      radial-gradient(35% 28% at 88% 14%, rgba(245,158,11,0.14), transparent 70%),
+      radial-gradient(45% 35% at 85% 92%, rgba(34,197,94,0.12), transparent 70%),
+      radial-gradient(40% 30% at 10% 95%, rgba(236,72,153,0.12), transparent 70%);
+    background-attachment: fixed;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 430px;
+    background: var(--bg-app);
+    min-height: 100vh;
+    border-radius: 0;
+    padding: 22px 16px 40px;
+    position: relative;
+  }
+
+  /* invisible reset button (top-left corner, above the first task's time) */
+  .reset-hit {
+    position: absolute;
+    top: 0; left: 0;
+    width: 72px; height: 40px;
+    z-index: 5;
+    /* completely invisible, but tappable */
+    background: transparent;
+  }
+
+  @media (min-width: 460px) {
+    body { align-items: center; padding: 24px 0; }
+    .app { min-height: auto; border-radius: 34px; margin: auto; box-shadow: 0 40px 120px rgba(0,0,0,0.6); }
+  }
+
+  /* ---- timeline rows ---- */
+  .timeline { display: flex; flex-direction: column; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 46px 40px 1fr;
+    align-items: center;
+    column-gap: 8px;
+  }
+
+  .time {
+    font-size: 15px;
+    color: var(--text-dim);
+    text-align: left;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.2px;
+  }
+
+  /* icon + connecting line column */
+  .node {
+    position: relative;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .node::before {
+    content: "";
+    position: absolute;
+    top: 0; bottom: 0;
+    left: 50%;
+    width: 1.5px;
+    background: var(--line);
+    transform: translateX(-50%);
+  }
+  .row.first .node::before { top: 50%; }
+  .row.last  .node::before { bottom: 50%; }
+
+  .icon {
+    position: relative;
+    z-index: 1;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  }
+  .icon svg { width: 19px; height: 19px; display: block; }
+
+  /* ---- cards ---- */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-card);
+    padding: 14px 16px;
+    margin: 7px 0;
+    position: relative;
+  }
+
+  .card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .card-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.35;
+    letter-spacing: 0.1px;
+  }
+  .card-sub {
+    font-size: 13.5px;
+    color: var(--text-dim);
+    margin-top: 3px;
+  }
+
+  .menu {
+    flex-shrink: 0;
+    color: var(--text-faint);
+    width: 22px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    margin: -2px -4px 0 0;
+    cursor: pointer;
+  }
+  .menu svg { width: 18px; height: 18px; }
+
+  /* exercise list */
+  .ex-list {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+  }
+  .ex-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 14px;
+  }
+  .ex-name { color: #d8d8dc; }
+  .ex-reps { color: var(--text-faint); white-space: nowrap; }
+
+  /* nutrition */
+  .nutri {
+    margin-top: 11px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    font-size: 13.5px;
+  }
+  .kcal { color: var(--text-dim); }
+  .macros { display: flex; align-items: center; gap: 12px; }
+  .macro { display: flex; align-items: center; gap: 5px; color: var(--text-dim); }
+  .macro .tag {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: #fff;
+  }
+
+  /* tappable affordances */
+  .time { cursor: pointer; transition: opacity .12s; }
+  .time:active { opacity: 0.5; }
+  .icon, .card-title { cursor: pointer; }
+  .icon { transition: transform .12s; }
+  .icon:active { transform: scale(0.9); }
+
+  /* ---- completed state ---- */
+  .row.done .icon { filter: grayscale(1) brightness(0.55); box-shadow: none; }
+  .row.done .card { opacity: 0.55; }
+  .row.done .card-title { text-decoration: line-through; color: var(--text-dim); }
+  .row.done .ex-name, .row.done .kcal, .row.done .macro span { text-decoration: line-through; }
+
+  /* ---- add-new row ---- */
+  .icon.add { background: #3a3a3e; color: #9a9aa0; box-shadow: none; }
+  .icon.add svg { width: 20px; height: 20px; }
+  .row.add-row .card {
+    background: transparent;
+    border: 1px dashed rgba(255,255,255,0.12);
+    cursor: pointer;
+    transition: border-color .15s, color .15s;
+  }
+  .row.add-row .card:active { border-color: rgba(255,255,255,0.28); }
+  .row.add-row .add-label { color: var(--text-faint); font-size: 15px; font-weight: 500; }
+
+  /* ---- edit sheet ---- */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(3px);
+    display: flex; align-items: flex-end; justify-content: center;
+    opacity: 0; pointer-events: none;
+    transition: opacity .2s;
+    z-index: 50;
+  }
+  .overlay.open { opacity: 1; pointer-events: auto; }
+  .overlay.center { align-items: center; }
+
+  .dialog {
+    width: 86%; max-width: 320px;
+    background: #232327;
+    border-radius: 20px;
+    padding: 26px 22px 20px;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+    transform: scale(0.92);
+    transition: transform .2s cubic-bezier(.32,.72,0,1);
+  }
+  .overlay.center.open .dialog { transform: scale(1); }
+  .dialog h3 { font-size: 19px; font-weight: 600; color: var(--text); text-align: center; margin-bottom: 22px; }
+  .dialog-actions { display: flex; gap: 10px; }
+
+  .sheet {
+    width: 100%; max-width: 430px;
+    background: #1f1f22;
+    border-radius: 22px 22px 0 0;
+    padding: 10px 20px calc(24px + env(safe-area-inset-bottom));
+    transform: translateY(100%);
+    transition: transform .26s cubic-bezier(.32,.72,0,1);
+    box-shadow: 0 -20px 60px rgba(0,0,0,0.5);
+    max-height: 92vh;
+    overflow-y: auto;
+  }
+  .overlay.open .sheet { transform: translateY(0); }
+
+  .grabber { width: 38px; height: 4px; border-radius: 2px; background: #4a4a4f; margin: 4px auto 16px; position: sticky; top: 0; }
+  .sheet h3 { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 18px; text-align: center; }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 12px; color: var(--text-faint); margin: 0 0 7px 2px; text-transform: uppercase; letter-spacing: .5px; }
+  .field input, .field textarea {
+    width: 100%;
+    background: #2c2c30;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    color: var(--text);
+    font-size: 16px;
+    font-family: inherit;
+    padding: 13px 14px;
+    outline: none;
+  }
+  .field input:focus, .field textarea:focus { border-color: #3b82f6; }
+  .field input[type=time] { -webkit-appearance: none; }
+  .field textarea {
+    min-height: 150px;
+    line-height: 1.5;
+    resize: vertical;
+  }
+  .field .hint { font-size: 11px; color: var(--text-faint); margin: 6px 2px 0; text-transform: none; letter-spacing: 0; }
+
+  /* icon picker */
+  .icon-picker {
+    display: flex; gap: 10px;
+    overflow-x: auto;
+    padding: 2px 2px 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .icon-opt {
+    flex: 0 0 auto;
+    width: 42px; height: 42px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; cursor: pointer;
+    border: 2px solid transparent;
+    box-shadow: 0 0 0 0 transparent;
+    transition: transform .12s;
+  }
+  .icon-opt svg { width: 21px; height: 21px; }
+  .icon-opt:active { transform: scale(0.9); }
+  .icon-opt.selected { border-color: #fff; box-shadow: 0 0 0 2px rgba(255,255,255,0.18); }
+
+  .sheet-actions { display: flex; gap: 10px; margin-top: 6px; position: sticky; bottom: 0; background: #1f1f22; padding-top: 8px; }
+  .btn {
+    flex: 1;
+    border: none; border-radius: 12px;
+    font-size: 16px; font-weight: 600;
+    font-family: inherit;
+    padding: 14px;
+    cursor: pointer;
+  }
+  .btn-save { background: #3b82f6; color: #fff; }
+  .btn-cancel { background: #2c2c30; color: var(--text-dim); }
+  .btn-save:active, .btn-cancel:active { opacity: 0.7; }
+
+  .btn-delete {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    background: transparent;
+    border: none;
+    color: #ff453a;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    padding: 12px;
+    cursor: pointer;
+  }
+  .btn-delete:active { opacity: 0.6; }
+  .btn-delete.hidden { display: none; }
+</style>
+</head>
+<body>
+  <div class="app">
+    <div class="reset-hit" id="reset-hit" aria-hidden="true"></div>
+    <div class="timeline" id="timeline"></div>
+  </div>
+
+  <!-- update / reset dialog -->
+  <div class="overlay center" id="update-overlay">
+    <div class="dialog">
+      <h3>Обновить?</h3>
+      <div class="dialog-actions">
+        <button class="btn btn-cancel" id="update-no">Нет</button>
+        <button class="btn btn-save" id="update-yes">Да</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- edit sheet -->
+  <div class="overlay" id="overlay">
+    <div class="sheet" id="sheet">
+      <div class="grabber"></div>
+      <h3 id="sheet-title">Редактировать пункт</h3>
+      <div class="field">
+        <label>Иконка</label>
+        <div class="icon-picker" id="edit-icons"></div>
+      </div>
+      <div class="field">
+        <label>Название</label>
+        <input type="text" id="edit-title" autocomplete="off">
+      </div>
+      <div class="field">
+        <label>Примечание</label>
+        <input type="text" id="edit-note" autocomplete="off" placeholder="напр. 1 hr 20 mins">
+      </div>
+      <div class="field">
+        <label>Описание</label>
+        <textarea id="edit-desc" placeholder="3 x Chin-Up&#10;2 x Push-Up&#10;..."></textarea>
+        <div class="hint">Каждая строка — отдельный пункт. Можно добавить значение справа через «|», напр.: 3 x Chin-Up | 19 total reps</div>
+      </div>
+      <div class="field">
+        <label>Время</label>
+        <input type="time" id="edit-time">
+      </div>
+      <button class="btn-delete" id="edit-delete">Удалить</button>
+      <div class="sheet-actions">
+        <button class="btn btn-cancel" id="edit-cancel">Отмена</button>
+        <button class="btn btn-save" id="edit-save">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ---------- icon glyphs (clean line icons) ---------- */
+const ICONS = {
+  moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>',
+  sunrise: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v3M4.9 7.9l1.4 1.4M2 15h2M20 15h2M17.7 9.3l1.4-1.4M22 18H2M16 18a4 4 0 0 0-8 0"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+  run: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="14.5" cy="4.5" r="1.8" fill="currentColor" stroke="none"/><path d="M8.5 21l2.2-4.5 2.3-2 .8 3.2 3.2 2.3M5.5 12.2l3-2.4 3.2-.8 2.4 2.6 2.6.9M9.5 15.5l-1 2.2"/></svg>',
+  dumbbell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 9v6M5 7.5v9M19 7.5v9M21.5 9v6M5 12h14"/></svg>',
+  sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>',
+  snowflake: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M5 5l14 14M19 5 5 19M12 5l-2.5 2M12 5l2.5 2M12 19l-2.5-2M12 19l2.5-2M5 12l2-2.5M5 12l2 2.5M19 12l-2-2.5M19 12l-2 2.5"/></svg>',
+  fork: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v7a2.5 2.5 0 0 0 5 0V2M8.5 2v6M18 2c-1.5 0-2.5 1.6-2.5 4.5S16.5 11 18 11m0-9v20"/></svg>'
+};
+
+const dots = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>';
+
+const plusIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+
+/* ---------- icon meta: default color per icon (order = picker order) ---------- */
+const ICON_META = {
+  moon:      { color: "#3b82f6" },
+  sunrise:   { color: "#f59e0b" },
+  check:     { color: "#34c759" },
+  run:       { color: "#14b8a6" },
+  dumbbell:  { color: "#9aa0a6", grad: true },
+  sun:       { color: "#ff3b30" },
+  snowflake: { color: "#5ac8fa" },
+  fork:      { color: "#a3cd3a" }
+};
+const ICON_ORDER = Object.keys(ICON_META);
+
+function applyIconStyle(node, iconKey) {
+  const meta = ICON_META[iconKey] || {};
+  node.style.background = meta.grad
+    ? "linear-gradient(160deg, #b9bcc2, #7e8288)"
+    : (meta.color || "#7e8288");
+}
+
+/* ---------- the day's data (DEFAULT / дефолтная версия) ---------- */
+const DAY = [
+  { id: "wake",   time: "11:30", icon: "sunrise",   title: "Пробуждение" },
+  { id: "warmup", time: "12:10", icon: "dumbbell",  title: "Утренняя разминка", sub: "10 минут",
+    exercises: [
+      ["Растяжка", "пара минут буквально"],
+      ["Упор рук", ""],
+      ["Разжим рук", ""],
+      ["Упор в голову", ""]
+    ]
+  },
+  { id: "shower", time: "12:20", icon: "snowflake", title: "Душ/Ванная", sub: "Максимум 30 минут" },
+  { id: "work",   time: "15:00", icon: "check",     title: "Работа", sub: "5-6 часов" },
+  { id: "space",  time: "16:00", icon: "sun",       title: "Космос", sub: "от 10 минут" },
+  { id: "sleep",  time: "23:59", icon: "moon",      title: "Сон", sub: "10 часов" }
+];
+
+/* ---------- persistent state ---------- */
+const STORE_KEY = "dailyTracker_state_v1";
+let store = {};
+try { store = JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { store = {}; }
+function saveStore() { localStorage.setItem(STORE_KEY, JSON.stringify(store)); }
+function ov(id) { return store[id] || (store[id] = {}); }
+// merged accessors
+function getTime(t)  { return store[t.id]?.time  ?? t.time; }
+function getTitle(t) { return store[t.id]?.title ?? t.title ?? ""; }
+function getSub(t)   { return store[t.id]?.sub   ?? t.sub ?? ""; }
+function getIcon(t)  { return store[t.id]?.icon  ?? t.icon ?? ICON_ORDER[0]; }
+function isDone(t)   { return !!store[t.id]?.done; }
+// description: stored string, OR built from default exercises, OR ""
+function defaultDesc(t) {
+  if (!t.exercises) return "";
+  return t.exercises.map(([name, reps]) => reps ? name + " | " + reps : name).join("\n");
+}
+function getDesc(t) { return store[t.id]?.desc ?? defaultDesc(t); }
+
+// built-in tasks + user-created custom tasks (excluding deleted)
+function allTasks() {
+  const custom = (store.__custom || []).map(id => ({ id, custom: true }));
+  return DAY.concat(custom).filter(t => !store[t.id]?.deleted);
+}
+
+/* ---------- render ---------- */
+function el(tag, cls, html) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (html != null) n.innerHTML = html;
+  return n;
+}
+
+// "HH:MM" -> minutes; tasks without a valid time sink to the bottom
+function timeToMinutes(str) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec((str || "").trim());
+  if (!m) return Number.MAX_SAFE_INTEGER;
+  return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+}
+
+// stable sort by time ascending (earlier = higher)
+function sortedDay() {
+  return allTasks()
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => {
+      const d = timeToMinutes(getTime(a.t)) - timeToMinutes(getTime(b.t));
+      return d !== 0 ? d : a.i - b.i;
+    })
+    .map(x => x.t);
+}
+
+function render() {
+  const root = document.getElementById("timeline");
+  root.innerHTML = "";
+  const day = sortedDay();
+  day.forEach((t, i) => {
+    const done = isDone(t);
+    const row = el("div", "row" + (i === 0 ? " first" : "") + (done ? " done" : ""));
+    row.dataset.id = t.id;
+
+    const timeEl = el("div", "time", getTime(t));
+    timeEl.addEventListener("click", () => openEditor(t));
+    row.appendChild(timeEl);
+
+    const node = el("div", "node");
+    const icon = el("div", "icon");
+    const iconKey = getIcon(t);
+    icon.innerHTML = ICONS[iconKey] || "";
+    applyIconStyle(icon, iconKey);
+    icon.addEventListener("click", () => toggleDone(t));
+    node.appendChild(icon);
+    row.appendChild(node);
+
+    // card
+    const card = el("div", "card");
+    const head = el("div", "card-head");
+    const titleWrap = el("div");
+    const titleEl = el("div", "card-title", getTitle(t));
+    titleEl.addEventListener("click", () => toggleDone(t));
+    titleWrap.appendChild(titleEl);
+    const subText = getSub(t);
+    if (subText) titleWrap.appendChild(el("div", "card-sub", subText));
+    head.appendChild(titleWrap);
+    card.appendChild(head);
+
+    const descText = getDesc(t);
+    if (descText.trim()) {
+      const list = el("div", "ex-list");
+      descText.split("\n").forEach(line => {
+        if (!line.trim()) return;
+        const [name, reps] = line.split("|").map(s => s.trim());
+        const exr = el("div", "ex-row");
+        exr.appendChild(el("span", "ex-name", name));
+        if (reps) exr.appendChild(el("span", "ex-reps", reps));
+        list.appendChild(exr);
+      });
+      card.appendChild(list);
+    }
+
+    if (t.nutrition) {
+      const n = el("div", "nutri");
+      n.appendChild(el("span", "kcal", t.nutrition.kcal + " kcal"));
+      const macros = el("div", "macros");
+      t.nutrition.macros.forEach(([letter, val, color]) => {
+        const m = el("div", "macro");
+        const tag = el("span", "tag", letter);
+        tag.style.background = color;
+        m.appendChild(tag);
+        m.appendChild(el("span", null, val));
+        macros.appendChild(m);
+      });
+      n.appendChild(macros);
+      card.appendChild(n);
+    }
+
+    row.appendChild(card);
+    root.appendChild(row);
+  });
+
+  // ---- always-last "add new task" row ----
+  const addRow = el("div", "row add-row last");
+  addRow.appendChild(el("div", "time", ""));
+  const addNode = el("div", "node");
+  const addIcon = el("div", "icon add", plusIcon);
+  addNode.appendChild(addIcon);
+  addRow.appendChild(addNode);
+  const addCard = el("div", "card");
+  addCard.appendChild(el("div", "add-label", "Добавить задачу"));
+  addRow.appendChild(addCard);
+  addRow.addEventListener("click", openCreate);
+  root.appendChild(addRow);
+}
+
+/* ---------- completed toggle ---------- */
+function toggleDone(t) {
+  const becomingDone = !isDone(t);
+  ov(t.id).done = becomingDone;
+  saveStore();
+  render();
+  if (becomingDone) maybeScrollAfterDone(t);
+}
+
+// scroll so the just-completed task sits at the top — but only when every
+// task above it is already done (i.e. completing in chronological order)
+function maybeScrollAfterDone(t) {
+  const day = sortedDay();
+  const idx = day.findIndex(x => x.id === t.id);
+  if (idx < 0) return;
+  const allEarlierDone = day.slice(0, idx).every(x => isDone(x));
+  if (!allEarlierDone) return;
+  const row = document.querySelector('.row[data-id="' + t.id + '"]');
+  if (!row) return;
+  const top = row.getBoundingClientRect().top + window.scrollY - 14;
+  window.scrollTo({ top, behavior: "smooth" });
+}
+
+/* ---------- edit sheet ---------- */
+const overlay   = document.getElementById("overlay");
+const titleInput = document.getElementById("edit-title");
+const noteInput  = document.getElementById("edit-note");
+const descInput  = document.getElementById("edit-desc");
+const timeInput  = document.getElementById("edit-time");
+const iconPicker = document.getElementById("edit-icons");
+const sheetTitle = document.getElementById("sheet-title");
+const deleteBtn = document.getElementById("edit-delete");
+let editingId = null;
+let creatingNew = false;
+let selectedIcon = null;
+
+function buildIconPicker() {
+  iconPicker.innerHTML = "";
+  ICON_ORDER.forEach(key => {
+    const opt = el("div", "icon-opt", ICONS[key]);
+    applyIconStyle(opt, key);
+    opt.dataset.icon = key;
+    opt.addEventListener("click", () => selectIcon(key));
+    iconPicker.appendChild(opt);
+  });
+}
+function selectIcon(key) {
+  selectedIcon = key;
+  [...iconPicker.children].forEach(c =>
+    c.classList.toggle("selected", c.dataset.icon === key));
+}
+
+function openEditor(t) {
+  creatingNew = false;
+  editingId = t.id;
+  sheetTitle.textContent = "Редактировать пункт";
+  titleInput.value = getTitle(t);
+  noteInput.value  = getSub(t);
+  descInput.value  = getDesc(t);
+  timeInput.value  = getTime(t);
+  selectIcon(getIcon(t));
+  deleteBtn.classList.remove("hidden");
+  overlay.classList.add("open");
+  overlay.querySelector(".sheet").scrollTop = 0;
+}
+function openCreate() {
+  creatingNew = true;
+  editingId = "custom_" + Date.now();
+  sheetTitle.textContent = "Новая задача";
+  titleInput.value = "";
+  noteInput.value  = "";
+  descInput.value  = "";
+  timeInput.value  = "";
+  selectIcon(ICON_ORDER[0]);
+  deleteBtn.classList.add("hidden");
+  overlay.classList.add("open");
+  overlay.querySelector(".sheet").scrollTop = 0;
+}
+function closeEditor() {
+  overlay.classList.remove("open");
+  editingId = null;
+  creatingNew = false;
+}
+function saveEditor() {
+  if (!editingId) return;
+  if (creatingNew) {
+    store.__custom = store.__custom || [];
+    store.__custom.push(editingId);
+  }
+  const o = ov(editingId);
+  o.title = titleInput.value.trim() || (creatingNew ? "Новая задача" : o.title);
+  o.sub = noteInput.value.trim();
+  o.desc = descInput.value;
+  if (selectedIcon) o.icon = selectedIcon;
+  if (timeInput.value) o.time = timeInput.value;
+  saveStore();
+  closeEditor();
+  render();
+}
+
+function deleteTask() {
+  if (!editingId) return;
+  if (!confirm("Удалить задачу?")) return;
+  if (editingId.startsWith("custom_")) {
+    store.__custom = (store.__custom || []).filter(x => x !== editingId);
+    delete store[editingId];
+  } else {
+    ov(editingId).deleted = true;
+  }
+  saveStore();
+  closeEditor();
+  render();
+}
+
+buildIconPicker();
+document.getElementById("edit-save").addEventListener("click", saveEditor);
+deleteBtn.addEventListener("click", deleteTask);
+document.getElementById("edit-cancel").addEventListener("click", closeEditor);
+overlay.addEventListener("click", (e) => { if (e.target === overlay) closeEditor(); });
+
+/* ---------- update / reset dialog ---------- */
+const updateOverlay = document.getElementById("update-overlay");
+function openUpdate() { updateOverlay.classList.add("open"); }
+function closeUpdate() { updateOverlay.classList.remove("open"); }
+function resetToDefault() {
+  localStorage.removeItem(STORE_KEY);
+  store = {};
+  closeUpdate();
+  render();
+  window.scrollTo({ top: 0 });
+}
+document.getElementById("reset-hit").addEventListener("click", openUpdate);
+document.getElementById("update-no").addEventListener("click", closeUpdate);
+document.getElementById("update-yes").addEventListener("click", resetToDefault);
+updateOverlay.addEventListener("click", (e) => { if (e.target === updateOverlay) closeUpdate(); });
+
+render();
+</script>
+</body>
+</html>
